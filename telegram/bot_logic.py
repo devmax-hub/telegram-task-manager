@@ -86,14 +86,7 @@ async def notify_marketer(message: str):
         await bot.send_message(chat_id=id, text=message)
 
 
-def get_level_keyboard() -> InlineKeyboardMarkup:
-    level_kb = InlineKeyboardBuilder()
 
-    for level in LEVEL_CHOICES:
-        level_kb.add(InlineKeyboardButton(text=level[1], callback_data=f'get_level_{level[0]}'))
-
-    level_kb.adjust(*[1] * 10)
-    return level_kb.as_markup(resize_keyboard=True)
 
 
 def get_position_keyboard() -> InlineKeyboardMarkup:
@@ -210,8 +203,6 @@ async def init_menu(callback_query, state: FSMContext):
         await done_tasks(callback_query, employee_id)
     elif callback_query.data == "registration":
         await registration(callback_query, state)
-    elif callback_query.data.startswith("get_level_"):
-        await process_employee_level(callback_query, state)
     elif callback_query.data.startswith("get_position_"):
         await process_employee_position(callback_query, state)
     elif callback_query.data == "profile":
@@ -282,17 +273,9 @@ async def process_employee_middlename(message: Message, state: FSMContext):
 
 async def process_employee_phone(message: Message, state: FSMContext):
     await state.update_data(phone=message.text)
-    await message.answer(text='Выберите свой уровень:', reply_markup=get_level_keyboard())
     # await state.set_state(RegistrationStates.waiting_for_level)
+    await message.answer(text='Выберите свою должность:', reply_markup=get_position_keyboard())
 
-
-# @dp.callback_query(F.data.startswith('get_level_'))
-async def process_employee_level(callback: CallbackQuery, state: FSMContext):
-    employee_level = callback.data.split('_')[2]
-    await state.update_data(level=employee_level)
-    # await state.update_data(level = callback.message.text)
-    await callback.message.answer(text='Выберите свою должность:', reply_markup=get_position_keyboard())
-    # await state.set_state(RegistrationStates.waiting_for_position)
 
 
 # @dp.callback_query(F.data.startswith('get_position_'))
@@ -305,17 +288,17 @@ async def process_employee_position(callback: CallbackQuery, state: FSMContext):
     phone = employee_data.get('phone')
     employee_position = callback.data.split("_")[2]
     telegram_username = callback.from_user.username
-    employee_level = employee_data.get('level')
+    employee_level = 'junior'
     await state.update_data(position=employee_position)
-    await register_employee(iin, name, middlename, surname, phone, employee_level, employee_position, telegram_username)
+    user = await register_employee(iin, name, middlename, surname, phone, employee_level, employee_position, telegram_username)
     admin_chat_ids = await get_admin_chatid()
     message = f"Зарегистрирован новый пользователь @{telegram_username}. Необходимо подтверждение."
+    ## todos: notify admin and after admin confirm notify user
     for id in admin_chat_ids:
         await store_notification(id, message)
         await bot.send_message(chat_id=id, text=message)
     await state.clear()
-    await callback.message.answer(text=f'Вы успешно зарегистрировались. - /start')
-    # await command_start_handler(callback.message)
+    await callback.message.answer(text=f"user {name} {surname} отправлен на подтверждение, когда он будет подтвержден, вы можете начать работу")
 
 
 async def online(callback_query, employee_id) -> None:

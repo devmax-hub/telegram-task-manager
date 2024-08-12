@@ -43,7 +43,7 @@ class Employee(models.Model):
     strike = models.IntegerField(verbose_name="Штрафные баллы", default=0)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано в", blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено в", blank=True, null=True)
-    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, verbose_name="Уровень", default='junior')
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, verbose_name="Уровень", default='junior', blank=True)
     position = models.CharField(max_length=255, choices=POSITION_CHOICES, verbose_name="Должность")
     # account = models.CharField(max_length=255, verbose_name="Логин", unique=True, blank=True, null=True)
     iin = models.CharField(max_length=255, verbose_name="ИИН", unique=True)
@@ -122,17 +122,13 @@ class EmployeeTask(models.Model):
     def __str__(self) -> str:
         return f"{self.employee} | {self.task}"
 
-    def custom_save(self, *args, **kwargs):
-        msg = None
-        if self.employee.status:
-            if self.checked and self.status == 'завершено':
+    def save(self, *args, **kwargs):
+        if self.checked:
+            if self.status == 'завершено':
                 self.assign_next_employee()
             else:
                 pass
-            super().save(*args, **kwargs)
-        else:
-            msg = "Сотрудник не активен"
-        return msg
+        super().save(*args, **kwargs)
 
 
     def assign_next_employee(self):

@@ -48,23 +48,34 @@ def done_task_list():
 
 @sync_to_async
 def register_employee(iin, name, middlename, surname, phone, employee_level, employee_position, telegram_username):
-    employee = Employee.objects.create(
-        surname = surname,
-        name = name,
-        middle_name = middlename,
-        level = employee_level,
-        position = employee_position,
-        iin = iin,
-        phone = phone,
-        telegram = telegram_username
-    ) 
-
-    # Balance.objects.create(
-    #     employee = employee,
-    #     balance = 0
-    # )
-
-    return True
+    try:
+        employee = Employee.objects.get(iin=iin)
+        data = {}
+        data['error'] = 'Employee already exists'
+        return data
+    except Employee.DoesNotExist:
+        employee = Employee.objects.create(
+            iin=iin,
+            name=name,
+            middle_name=middlename,
+            surname=surname,
+            phone=phone,
+            level=employee_level,
+            position=employee_position,
+            telegram=telegram_username
+        )
+        data = {
+            'id': employee.id,
+            'iin': employee.iin,
+            'name': employee.name,
+            'middle_name': employee.middle_name,
+            'surname': employee.surname,
+            'phone': employee.phone,
+            'level': employee.level,
+            'position': employee.position,
+            'telegram': employee.telegram
+        }
+        return data
 
 @sync_to_async
 def current_tasks():
