@@ -26,7 +26,6 @@ TOKEN = os.getenv('TOKEN')
 storage = MemoryStorage()
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=storage)
-
 router = Router()
 dp.include_router(router)
 
@@ -40,6 +39,7 @@ employee_id = -1
 
 employee_level = ''
 employee_position = ''
+
 
 # https://www.youtube.com/watch?v=yetfif4j_go
 # btnMain - KeyboardButton("Главное меню")
@@ -86,9 +86,6 @@ async def notify_marketer(message: str):
         await bot.send_message(chat_id=id, text=message)
 
 
-
-
-
 def get_position_keyboard() -> InlineKeyboardMarkup:
     position_keyboard = InlineKeyboardBuilder()
 
@@ -109,6 +106,7 @@ main_keyboard = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Старт/Стоп", callback_data="online")],
     [InlineKeyboardButton(text="Текущие задачи", callback_data="tasks")],
     [InlineKeyboardButton(text="Личный кабинет", callback_data="profile")],
+    [InlineKeyboardButton(text="Чат с маркетологом", callback_data="chat")],
 ])
 
 admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -117,6 +115,7 @@ admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Выполненные задачи", callback_data="all_done_tasks")],
     # [InlineKeyboardButton(text="Управление счетами", callback_data="balance_manage")],
     # [InlineKeyboardButton(text="Обнулить счет сотрудника", callback_data="null_money")],
+    [InlineKeyboardButton(text="Чат с сотрудниками", callback_data="employees_list")],
 ])
 
 profile_keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -135,6 +134,7 @@ class InitStates(StatesGroup):
     employee_position = State()
     employee_level = State()
     isOnline = State()
+
 
 class AddTaskStates(StatesGroup):
     waiting_for_name = State()
@@ -240,7 +240,10 @@ async def init_menu(callback_query, state: FSMContext):
             await callback_query.message.answer(text="Административная панель", reply_markup=admin_keyboard)
         else:
             await callback_query.message.answer(text="Главное меню", reply_markup=main_keyboard)
-
+    elif callback_query.data == "chat":
+        await chat(callback_query, employee_id)
+    elif callback_query.data == "employees_list":
+        await employees_list(callback_query)
 
 async def registration(callback_query, state: FSMContext):
     await callback_query.message.answer(text="Введите свой ИИН:")
@@ -277,7 +280,6 @@ async def process_employee_phone(message: Message, state: FSMContext):
     await message.answer(text='Выберите свою должность:', reply_markup=get_position_keyboard())
 
 
-
 # @dp.callback_query(F.data.startswith('get_position_'))
 async def process_employee_position(callback: CallbackQuery, state: FSMContext):
     employee_data = await state.get_data()
@@ -290,7 +292,8 @@ async def process_employee_position(callback: CallbackQuery, state: FSMContext):
     telegram_username = callback.from_user.username
     employee_level = 'junior'
     await state.update_data(position=employee_position)
-    user = await register_employee(iin, name, middlename, surname, phone, employee_level, employee_position, telegram_username)
+    user = await register_employee(iin, name, middlename, surname, phone, employee_level, employee_position,
+                                   telegram_username)
     admin_chat_ids = await get_admin_chatid()
     message = f"Зарегистрирован новый пользователь @{telegram_username}. Необходимо подтверждение."
     ## todos: notify admin and after admin confirm notify user
@@ -298,7 +301,8 @@ async def process_employee_position(callback: CallbackQuery, state: FSMContext):
         await store_notification(id, message)
         await bot.send_message(chat_id=id, text=message)
     await state.clear()
-    await callback.message.answer(text=f"user {name} {surname} отправлен на подтверждение, когда он будет подтвержден, вы можете начать работу")
+    await callback.message.answer(
+        text=f"user {name} {surname} отправлен на подтверждение, когда он будет подтвержден, вы можете начать работу")
 
 
 async def online(callback_query, employee_id) -> None:
@@ -617,6 +621,66 @@ async def get_task_by_id(task_id):
             return task
     return None
 
+
+users = {}
+
+
+async def chat(callback_query, employee_id):
+    message = callback_query.message
+    chat_id = message.chat.id
+    employee = await employee_by_id(employee_id)
+    if not employee:
+        await message.answer(text="Доступ запрещен")
+        return
+    user_id = message.from_user.id
+    logging.info(f'user_id: {user_id}')
+    if user_id in users:
+        await message.reply("Вы уже подключены к чату")
+        logging.info(f'users: {users}')
+        logging.info(f'user_id: {user_id}')
+        logging.info(f'other_user_id: {users[user_id]}')
+        logging.info(f'chat_id: {chat_id}')
+        logging.info(f' message: {message.text}')
+        return
+
+    if not users:
+        users[user_id] = None
+        await message.reply("Ожидание подключения второго пользователя ...")
+    else:
+        other_user_id = next(iter(users))
+        users[usert_id] = other_user_id
+        users[other_user_id] = user_id
+        await bot.send_message(chat_id=other_user_id, text="Пользователь подключен")
+        await message.reply("Пользователь подключен")
+        logging.info(f'users: {users}')
+        logging.info(f'user_id: {user_id}')
+        logging.info(f'other_user_id: {users[user_id]}')
+        logging.info(f'chat_id: {chat_id}')
+        logging.info(f' message: {message.text}')
+    if users[user_id] is None:
+        await disconnect_from_chat(chat_id, message)
+
+async def employees_list(callback_query):
+    ## list of employees
+    employees = await get_employees()
+    ## show employees as fio list
+    employees_list = []
+    for employee in employees:
+        employees_list.append(f"{employee['name']} {employee['surname']}")
+    await callback_query.message.answer('\n'.join(employees_list), reply_markup=main_menu_keyboard)
+    ## choose employee to chat
+    ## chat with employee
+
+
+async def disconnect_from_chat(chat_id, message):
+    timeout = 300
+    await asyncio.sleep(timeout)
+    if user_id in users and users[user_id]:
+        other_user_id = users[user_id]
+        del users[user_id]
+        del users[other_user_id]
+        await bot.send_message(chat_id=other_user_id, text="Пользователь отключен")
+        await message.reply("Пользователь отключен")
 
 dp.message.register(process_employee_iin, RegistrationStates.waiting_for_iin)
 dp.message.register(process_employee_name, RegistrationStates.waiting_for_name)

@@ -32,6 +32,8 @@ LEVEL_CHOICES = [
     ('senior', 'senior'),
 ]
 
+WORKFLOW_ORDER = ['copywriter', 'mobilograph', 'editor', 'designer', 'smm', 'marketer', 'admin']
+
 
 class Employee(models.Model):
     surname = models.CharField(max_length=50, verbose_name="Фамилия")
@@ -102,8 +104,9 @@ class EmployeeTask(models.Model):
         ('средний', 'средний'),
         ('высокий', 'высокий'),
     ]
-
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, verbose_name="Сотрудник")
+    position = models.CharField(max_length=255, choices=POSITION_CHOICES, verbose_name="Должность", null=True,
+                                blank=True)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, verbose_name="Сотрудник", null=True, blank=True)
     task = models.ForeignKey(Task, on_delete=models.CASCADE, verbose_name="Задача")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано в", blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено в", blank=True, null=True)
@@ -114,6 +117,7 @@ class EmployeeTask(models.Model):
     rating = models.IntegerField(verbose_name="Оценка", blank=True, null=True)
     address = models.CharField(max_length=255, verbose_name="Адрес", null=True, blank=True)
 
+
     class Meta:
         verbose_name = 'задачу сотрудника'
         verbose_name_plural = 'Задачи сотрудников'
@@ -123,6 +127,8 @@ class EmployeeTask(models.Model):
         return f"{self.employee} | {self.task}"
 
     def save(self, *args, **kwargs):
+        if self.position is not None:
+            self.assign_employee()
         if self.checked:
             if self.status == 'завершено':
                 self.assign_next_employee()
@@ -130,31 +136,82 @@ class EmployeeTask(models.Model):
                 pass
         super().save(*args, **kwargs)
 
+    def assign_employee(self):
+        current_position = self.position
 
-    def assign_next_employee(self):
-        workflow_order = [
-            'copywriter',
-            'mobilograph',
-            'editor',
-            'designer',
-            'smm',
-            'marketer',
-            'admin'
-
-        ]
-
-        current_position = self.employee.position
-
-        if current_position not in workflow_order:
+        if current_position not in WORKFLOW_ORDER:
             return
 
-        next_position_index = workflow_order.index(current_position) + 1
+        position_index = WORKFLOW_ORDER.index(current_position)
 
-        if next_position_index >= len(workflow_order):
+        if position_index >= len(WORKFLOW_ORDER):
             self.status = 'завершено'
             return
 
-        next_position = workflow_order[next_position_index]
+        position = WORKFLOW_ORDER[position_index]
+
+        employee_queryset = Employee.objects.filter(
+            position=position,
+            status=True
+        ).annotate(
+            task_count=Count('employeetask')
+        ).order_by('-rating', 'task_count') #'status'
+
+        if not employee_queryset.exists():
+            employee_queryset = Employee.objects.filter(
+                position=position
+            ).annotate(
+                task_count=Count('employeetask')
+            ).order_by('-rating', 'task_count')
+
+        if employee_queryset.exists():
+            highest_rating = employee_queryset.first().rating
+            top_employees = employee_queryset.filter(rating=highest_rating)
+
+            employee = random.choice(
+                top_employees) if top_employees.count() > 1 else employee_queryset.first()
+
+            logging.info(f"Employee: {employee.id}")
+
+            # employee_rating = employee.rating
+            # employee_rating += self.rating
+            # Employee.objects.filter(id=self.employee.id).update(rating=employee_rating)
+
+            EmployeeTask.objects.create(
+                employee=employee,
+                task=self.task,
+                status='новое',
+                deadline=self.deadline,
+                priority=self.priority,
+                checked=False,
+                rating=self.rating
+            )
+
+            TaskHistory.objects.create(
+                employee=employee,
+                task=self.task
+            )
+
+            message = "У вас новая задача"
+            bot.send_message(chat_id=employee.chat_id, text=message)
+            Notification.objects.create(
+                employee=employee,
+                task=self.task,
+                message=message
+            )
+    def assign_next_employee(self):
+        current_position = self.employee.position
+
+        if current_position not in WORKFLOW_ORDER:
+            return
+
+        next_position_index = WORKFLOW_ORDER.index(current_position)
+
+        if next_position_index >= len(WORKFLOW_ORDER):
+            self.status = 'завершено'
+            return
+
+        next_position = WORKFLOW_ORDER[next_position_index]
 
         next_employee_queryset = Employee.objects.filter(
             position=next_position,

@@ -19,6 +19,9 @@ bot = Bot(token=API_TOKEN)
 @receiver(post_save, sender=EmployeeTask)
 async def send_employee_task_notification(sender, instance, created, **kwargs):
     if created:
+        ## check if position then skip
+        if instance.employee is None:
+            return
         employee = instance.employee
         chat_id = employee.chat_id
         message_employee = "У вас появилась новая задача: {}".format(instance.task.name)
