@@ -1,0 +1,1 @@
+* * * * * /usr/local/bin/python /app/manage.py update_task_status

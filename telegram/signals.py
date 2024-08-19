@@ -27,6 +27,7 @@ async def send_employee_task_notification(sender, instance, created, **kwargs):
         message_employee = "У вас появилась новая задача: {}".format(instance.task.name)
         message_admin_marketer = f"Новая задача для {employee.position}: {instance.task.name}"
         logging.info(f"New task for {employee.fio} (chat_id {chat_id}): {instance.task.name}")
+
         try:
             await bot.send_message(chat_id=chat_id, text=message_employee)
         except Exception as e:

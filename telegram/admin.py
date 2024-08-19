@@ -16,11 +16,12 @@ class TaskAdmin(admin.ModelAdmin):
 @admin.register(EmployeeTask)
 class EmployeeTaskAdmin(admin.ModelAdmin):
     list_display = ('employee', 'task', 'created_at', 'updated_at', 'status', 'deadline', 'priority', 'checked', 'rating')
-    
+    readonly_fields = ['employee']
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     list_display = ('employee', 'task', 'created_at', 'message', 'status')
     readonly_fields = ('employee', 'task', 'created_at', 'updated_at', 'message', 'status')
+
     def has_add_permission(self, request, obj=None):
         return False
     def has_change_permission(self, request, obj=None):

@@ -13,7 +13,7 @@ import asyncio
 
 load_dotenv()
 
-API_TOKEN = os.getenv('TOKEN') 
+API_TOKEN = os.getenv('TOKEN')
 
 bot = Bot(token=API_TOKEN)
 
@@ -35,11 +35,11 @@ def done_task_list():
         ).select_related('task').annotate(
             task_name=F('task__name'),
             task_description=F('task__description'),
-            task_file_path=F('task__file_path'),
+            task_file=F('task__file'),
             task_link=F('task__link'),
         ).values(
             'id', 'employee_id', 'task_id', 'task_name', 'task_description',
-            'task_file_path', 'task_link', 'created_at', 'updated_at', 'status',
+            'task_file', 'task_link', 'created_at', 'updated_at', 'status',
             'deadline', 'priority', 'checked', 'rating'
         )
     except (EmployeeTask.DoesNotExist):
@@ -85,13 +85,14 @@ def current_tasks():
         ).select_related('task').annotate(
             task_name=F('task__name'),
             task_description=F('task__description'),
-            task_file_path=F('task__file_path'),
+            task_file=F('task__file'),
             task_link=F('task__link'),
         ).values(
             'id', 'employee_id', 'task_id', 'task_name', 'task_description',
-            'task_file_path', 'task_link', 'created_at', 'updated_at', 'status',
+            'task_file', 'task_link', 'created_at', 'updated_at', 'status',
             'deadline', 'priority', 'checked', 'rating'
         )
+        logging.info(f'current_tasks: {employee_tasks}')
     except (EmployeeTask.DoesNotExist):
         return False
 
@@ -126,7 +127,7 @@ def task_update(id, name, description, file, link):
         file = file,
         link = link
     )
-    
+
     task.save()
 
     return list(task)
@@ -150,7 +151,7 @@ def submit_task_func(employee_id, task_id):
 #         current_employee = Employee.objects.get(id=employee_id)
 
 #         next_position = "admin"
-        
+
 #         if current_employee.position == "copywriter":
 #             next_position = "mobilograph"
 #         elif current_employee.position == "mobilograph":
@@ -168,7 +169,7 @@ def submit_task_func(employee_id, task_id):
 
 #             return True
 
-        
+
 #         next_employee = (
 #             Employee.objects.filter(position=next_position)
 #             .annotate(task_count=Count('employeetask'))
@@ -217,15 +218,16 @@ def submit_task_func(employee_id, task_id):
 #             return True
 #         else:
 #             return False
-        
+
 #     except Employee.DoesNotExist:
 #         return False
 
 @sync_to_async
 def employee_by_telegram(telegram):
     try:
-        employee = Employee.objects.get(telegram=telegram)
-        if employee.is_confirmed:
+        logging.info(f'employee_by_telegram {telegram}')
+        employee = Employee.objects.filter(telegram=telegram).first()
+        if employee:
             return {
                 "id": employee.pk,
                 "surname": employee.surname,
@@ -233,17 +235,18 @@ def employee_by_telegram(telegram):
                 "middle_name": employee.middle_name,
                 "telegram": employee.telegram,
                 "position": employee.position,
+                "is_confirmed": employee.is_confirmed,
             }
         else:
-            return "employee is not confirmed"
+            return None
     except (Employee.DoesNotExist):
-        return False        
+        return None
 
 @sync_to_async
 def employee_by_id(employee_id):
     try:
         employee = Employee.objects.get(id=employee_id)
-        
+
         try:
             balance = Balance.objects.get(employee_id=employee_id)
             balance = balance.balance
@@ -279,6 +282,7 @@ def current_employee_tasks(employee_id):
             'task_file', 'task_link', 'created_at', 'updated_at', 'status',
             'deadline', 'priority', 'checked', 'rating'
         )
+
     except (EmployeeTask.DoesNotExist):
         return False
 
@@ -287,7 +291,7 @@ def current_employee_tasks(employee_id):
 
 @sync_to_async
 def done_employee_tasks(employee_id):
-    employee = Employee.objects.get(id=employee_id)    
+    employee = Employee.objects.get(id=employee_id)
     try:
         employee_tasks = EmployeeTask.objects.filter(
             status='завершено',
@@ -295,11 +299,11 @@ def done_employee_tasks(employee_id):
         ).select_related('task').annotate(
             task_name=F('task__name'),
             task_description=F('task__description'),
-            task_file_path=F('task__file'),
+            task_file=F('task__file'),
             task_link=F('task__link'),
         ).values(
             'id', 'employee_id', 'task_id', 'task_name', 'task_description',
-            'task_file_path', 'task_link', 'created_at', 'updated_at', 'status',
+            'task_file', 'task_link', 'created_at', 'updated_at', 'status',
             'deadline', 'priority', 'checked', 'rating'
         )
     except (EmployeeTask.DoesNotExist):
@@ -308,7 +312,7 @@ def done_employee_tasks(employee_id):
 
 @sync_to_async
 def employee_tasks(employee_id):
-    employee = Employee.objects.get(id=employee_id)    
+    employee = Employee.objects.get(id=employee_id)
     try:
         tasks = EmployeeTask.objects.filter(employee=employee).values()
     except (EmployeeTask.DoesNotExist):
@@ -350,7 +354,7 @@ def show_balance(employee_id):
         balance = Balance.objects.get(employee_id=employee_id)
     except ObjectDoesNotExist:
         return False
-    return list(balance) 
+    return list(balance)
 
 @sync_to_async
 def balance_output(employee_id):
@@ -368,7 +372,7 @@ def set_chat_id(employee_id, chat_id):
     if employee.chat_id is None:
         employee.chat_id = chat_id
         employee.save()
-    
+
     return True
 
 @sync_to_async

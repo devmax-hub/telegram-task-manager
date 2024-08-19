@@ -41,24 +41,19 @@ employee_level = ''
 employee_position = ''
 
 
-def main_kb(typeUser):
-    if typeUser == 'guest':
+def main_kb(isAdmin):
+    kb_list = [
+        [KeyboardButton(text="Главное меню"),
+         KeyboardButton(text="init_menu"),
+         KeyboardButton(text="Старт/Стоп")],
+        [KeyboardButton(text="Текущие задачи"),
+         KeyboardButton(text="Личный кабинет")],
+    ]
+    if isAdmin in ['admin', 'marketer']:
         kb_list = [
-            [KeyboardButton(text="Регистрация")],
-        ]
-    elif typeUser == 'user':
-        kb_list = [
-            [KeyboardButton(text="/start")],
-            [KeyboardButton(text="Онлайн/Оффлайн")],
-            [KeyboardButton(text="Текущие задачи"),
-             KeyboardButton(text="Личный кабинет")],
-        ]
-
-    elif typeUser in ['admin', 'marketer']:
-        kb_list = [
-            [KeyboardButton(text="/start")],
-            [KeyboardButton(text="Текущие задачи сотрудника")],
-            [KeyboardButton(text="Выполненные задачи сотрудника")],
+            [KeyboardButton(text="Добавить новую задачу")],
+            [KeyboardButton(text="Текущие задачи")],
+            [KeyboardButton(text="Выполненные задачи")],
         ]
 
     return ReplyKeyboardMarkup(
@@ -70,20 +65,19 @@ def main_kb(typeUser):
 
 
 async def set_commands():
-    pass
-    # commands = [
-    #     BotCommand(command="start", description="Start the bot"),
-    #     BotCommand(command="help", description="Show help"),
-    #     BotCommand(command="balance", description="Show balance"),
-    #     BotCommand(command="get_money", description="Get money"),
-    #     BotCommand(command="tasks", description="Show tasks"),
-    #     BotCommand(command="done_tasks", description="Show done tasks"),
-    #     BotCommand(command="online", description="Show online status"),
-    #     BotCommand(command="profile", description="Show profile"),
-    #     BotCommand(command="chat", description="Chat with marketer"),
-    #     BotCommand(command="employees_list", description="List of employees"),
-    # ]
-    # await bot.set_my_commands(commands, scope=BotCommandScopeChat())
+    commands = [
+        BotCommand(command="start", description="Start the bot"),
+        BotCommand(command="help", description="Show help"),
+        BotCommand(command="balance", description="Show balance"),
+        BotCommand(command="get_money", description="Get money"),
+        BotCommand(command="tasks", description="Show tasks"),
+        BotCommand(command="done_tasks", description="Show done tasks"),
+        BotCommand(command="online", description="Show online status"),
+        BotCommand(command="profile", description="Show profile"),
+        BotCommand(command="chat", description="Chat with marketer"),
+        BotCommand(command="employees_list", description="List of employees"),
+    ]
+    await bot.set_my_commands(commands, scope=BotCommandScopeChat())
 
 
 async def send_message_to_employee(chat_id: str, message: str):
@@ -137,16 +131,20 @@ main_menu_keyboard = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 main_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="Главное меню", callback_data="init_menu")],
     [InlineKeyboardButton(text="Старт/Стоп", callback_data="online")],
     [InlineKeyboardButton(text="Текущие задачи", callback_data="tasks")],
     [InlineKeyboardButton(text="Личный кабинет", callback_data="profile")],
-    # [InlineKeyboardButton(text="Чат с маркетологом", callback_data="chat")],
+    [InlineKeyboardButton(text="Чат с маркетологом", callback_data="chat")],
 ])
 
 admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Добавить новую задачу", callback_data="add_task")],
     [InlineKeyboardButton(text="Текущие задачи", callback_data="all_current_tasks")],
     [InlineKeyboardButton(text="Выполненные задачи", callback_data="all_done_tasks")],
+    # [InlineKeyboardButton(text="Управление счетами", callback_data="balance_manage")],
+    # [InlineKeyboardButton(text="Обнулить счет сотрудника", callback_data="null_money")],
+    [InlineKeyboardButton(text="Чат с сотрудниками", callback_data="employees_list")],
 ])
 
 profile_keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -160,13 +158,11 @@ skip_button = KeyboardButton(text="Пропустить", callback_data="skip")
 
 
 class InitStates(StatesGroup):
-    user_id = State()
     employee_id = State()
     isAdmin = State()
     employee_position = State()
     employee_level = State()
     isOnline = State()
-    employee = State()
 
 
 class AddTaskStates(StatesGroup):
@@ -186,18 +182,20 @@ class RegistrationStates(StatesGroup):
     waiting_for_position = State()
 
 
-@dp.message(Command('start'))
+@dp.callback_query(F.data == 'start_menu')
+@dp.message(CommandStart())
 async def command_start_handler(message: Message, state: FSMContext):
-    logging.info(f'message: {message}')
+    # logging.info(f'message: {message}')
     user_id = message.from_user.id
+    chat_id = message.chat.id
     employee = await employee_by_telegram(user_id)
     logging.info(f'employee: {employee} {user_id}')
-    logging.info(f'user_id {user_id}')
-
+    logging.info(f'message: {message.text}')
+    logging.info(f'chat_id: {chat_id} user_id {user_id}')
     try:
-        if employee is not None:
+        if employee:
             await set_chat_id(employee['id'], message.from_user.id)
-            await state.update_data(employee=employee)
+        if employee is not None:
             if not employee['is_confirmed']:
                 await message.answer(text="Ожидание подтверждения...")
                 return
@@ -205,89 +203,89 @@ async def command_start_handler(message: Message, state: FSMContext):
             if employee['position'] == 'admin' or employee['position'] == 'marketer':
                 isAdmin = employee['position'] in ['admin', 'marketer']
                 await state.update_data(isAdmin=isAdmin)
-                await bot.send_message(chat_id=message.from_user.id, text="Добро пожаловать в систему")
                 await message.answer(
                     text=f'Добро пожаловать в Административную панель',
-                    reply_markup=main_kb(typeUser='admin')
+                    reply_markup=admin_keyboard
                 )
             else:
                 isAdmin = 'user'
                 logging.info(f'init user: {employee["telegram"]}')
-                await bot.send_message(chat_id=message.from_user.id, text="Добро пожаловать в систему")
                 await state.update_data(isAdmin=isAdmin)
-
                 await message.answer(
                     text=f"Добро пожаловать, {employee['name']}!",
-                    reply_markup=main_kb(typeUser='user')
+                    reply_markup=main_keyboard
                 )
         else:
-            await message.answer(
-                text=f"Добро пожаловать!",
-                reply_markup=main_kb(typeUser='guest')
-            )
+           await message.answer(text="Войдите в систему. /start", reply_markup=registration_keyboard)
     except Exception as e:
         logging.error(f'error: {e}')
         await message.answer("Произошла ошибка при обработке запроса. Попробуйте позже.")
         return
 
 
-#### admin ####
+@dp.callback_query()
+async def init_menu(callback_query, state: FSMContext):
+    employee = await employee_by_telegram(callback_query.from_user.id)
+    logging.info(f'employee: {employee}')
+    employee_id = -1
+    isAdmin = False
+    if employee:
+        await state.update_data(employee_id=employee['id'])
+        employee_id = employee['id']
+        isAdmin = employee['position'] in ['admin', 'marketer']
+    await state.update_data(isAdmin=isAdmin)
+    logging.info(f'employee_id: {employee_id} isAdmin: {isAdmin}')
+    if callback_query.data == "tasks":
+        await tasks(callback_query, employee_id)
+    elif callback_query.data == "done_tasks":
+        await done_tasks(callback_query, employee_id)
+    elif callback_query.data == "registration":
+        await registration(callback_query, state)
+    elif callback_query.data.startswith("get_position_"):
+        await process_employee_position(callback_query, state)
+    elif callback_query.data == "profile":
+        await profile(callback_query, employee_id)
+    elif callback_query.data == "balance":
+        await balance(callback_query, employee_id)
+    elif callback_query.data == "get_money":
+        await get_money(callback_query, employee_id)
+    elif callback_query.data.startswith("view_task_"):
+        task_id = int(callback_query.data.split("_")[-1])
+        await view_task(callback_query, task_id)
+    elif callback_query.data.startswith("finish_task"):
+        task_id = int(callback_query.data.split("_")[-1])
+        await finish_task(callback_query, task_id, employee_id)
+    elif callback_query.data == "add_task":
+        await add_task(callback_query, state)
+    elif callback_query.data == "all_done_tasks":
+        await all_done_tasks(callback_query)
+    elif callback_query.data == "all_current_tasks":
+        await all_current_tasks(callback_query)
+    elif callback_query.data == "balance_manage":
+        await balance_manage(callback_query)
+    elif callback_query.data == "null_money":
+        await null_money(callback_query)
+    elif callback_query.data == "online":
+        await online(callback_query, employee_id)
+    elif callback_query.data == "back":
+        await callback_query.message.edit_reply_markup(reply_markup=None)
+        if isAdmin:
+            await callback_query.message.answer(text="Административная панель", reply_markup=admin_keyboard)
+        else:
+            await callback_query.message.answer(text="Главное меню", reply_markup=main_keyboard)
+    elif callback_query.data == "panel":
+        if isAdmin:
+            await callback_query.message.answer(text="Административная панель", reply_markup=admin_keyboard)
+        else:
+            await callback_query.message.answer(text="Главное меню", reply_markup=main_keyboard)
+    elif callback_query.data == "chat":
+        await chat(callback_query, employee_id)
+    elif callback_query.data == "employees_list":
+        await employees_list(callback_query)
 
-@dp.message(F.text.lower() == "выполненные задачи сотрудника")  # "tasks" -> "задачи"
-@dp.message(Command('done_tasks_users'))
-async def handle_tasks(message: types.Message, state: FSMContext):
-    await admin_done_tasks(message, state)
-@dp.message(F.text.lower() == "текущие задачи сотрудника")  # "all_current_tasks" -> "все текущие задачи"
-@dp.message(Command('current_tasks_users'))
-async def handle_all_current_tasks(message: types.Message, state: FSMContext):
-    await admin_all_current_tasks(message)
 
-
-##################
-### misc ####
-
-
-##################
-#### registration ####
-@dp.message(F.text.lower() == "регистрация")  # "registration" -> "регистрация"
-@dp.message(Command('registration'))
-async def handle_registration(message: types.Message, state: FSMContext):
-    await registration(message, state)
-
-#######################
-@dp.message(F.text.lower() == 'онлайн/оффлайн')
-async def start_stop(message: Message, state: FSMContext):
-    await message.answer(text="Выберите статус", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Online", callback_data="online")],
-        [InlineKeyboardButton(text="Offline", callback_data="online")],
-    ]))
-
-@dp.message(F.text.lower() == "текущие задачи")  # "tasks" -> "задачи"
-@dp.message(Command('tasks'))
-async def handle_tasks(message: types.Message, state: FSMContext):
-    await tasks(message, state)
-
-
-
-#### личный кабинет ####
-@dp.message(F.text.lower() == "личный кабинет")  # "profile" -> "профиль"
-@dp.message(Command('profile'))
-async def handle_profile(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    logging.info(f'data: {data}')
-    await profile(message, data.get('employee_id'))
-
-
-@dp.callback_query(F.data.startswith("view_task_"))
-async def handle_view_task(callback_query: CallbackQuery, state: FSMContext):
-    task_id = int(callback_query.data.split("_")[-1])
-    await view_task(callback_query, task_id)
-
-
-
-#################
-async def registration(message, state: FSMContext):
-    await message.answer(text="Введите свой ИИН:")
+async def registration(callback_query, state: FSMContext):
+    await callback_query.message.answer(text="Введите свой ИИН:")
     await state.set_state(RegistrationStates.waiting_for_iin)
 
 
@@ -321,7 +319,7 @@ async def process_employee_phone(message: Message, state: FSMContext):
     await message.answer(text='Выберите свою должность:', reply_markup=get_position_keyboard())
 
 
-@dp.callback_query(F.data.startswith('get_position_'))
+# @dp.callback_query(F.data.startswith('get_position_'))
 async def process_employee_position(callback: CallbackQuery, state: FSMContext):
     employee_data = await state.get_data()
     iin = employee_data.get('iin')
@@ -346,14 +344,11 @@ async def process_employee_position(callback: CallbackQuery, state: FSMContext):
         text=f"user {name} {surname} отправлен на подтверждение, когда он будет подтвержден, вы можете начать работу")
 
 
-@dp.callback_query(F.data == "online")
-async def online(callback_query, state: FSMContext) -> None:
+async def online(callback_query, employee_id) -> None:
     """
         if i click one it onlne
         after again it false and show Online or Offline
    """
-    data = await state.get_data()
-    employee_id = data.get('employee_id')
     status = await get_online(employee_id)
     new_status = not status
     await set_online(employee_id, new_status)
@@ -362,7 +357,6 @@ async def online(callback_query, state: FSMContext) -> None:
 
 
 async def profile(event, employee_id) -> None:
-    logging.info(f'profile employee_id: {employee_id}')
     employee = await employee_by_id(employee_id)
     logging.info(f'employee: {employee} {employee_id}')
     response_text = (
@@ -374,9 +368,7 @@ async def profile(event, employee_id) -> None:
         await event.message.answer(text=response_text, reply_markup=profile_keyboard)
 
 
-async def tasks(event, state) -> None:
-    data = await state.get_data()
-    employee_id = data.get('employee_id')
+async def tasks(event, employee_id) -> None:
     employee = await employee_by_id(employee_id)
     if not employee:
         await event.answer(text="Доступ запрещен")
@@ -400,38 +392,37 @@ async def tasks(event, state) -> None:
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Завершить задачу", callback_data=f"finish_task_{task['task_id']}")],
-
+                [back_button]
             ])
             task_messages.append((task_details, keyboard))
 
     if isinstance(event, Message):
         if not tasks:
-            await event.answer(text=response_text)
+            await event.answer(text=response_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]]))
         else:
             for task_details, keyboard in task_messages:
                 await event.answer(text=task_details, reply_markup=keyboard)
     elif isinstance(event, CallbackQuery):
         if not tasks:
-            pass
+            await event.message.answer(text=response_text,
+                                       reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]]))
         else:
             for task_details, keyboard in task_messages:
                 await event.message.answer(text=task_details, reply_markup=keyboard)
 
 
-async def admin_done_tasks(message, state: FSMContext) -> None:
-    logging.info(f'admin all_done_tasks')
+async def all_done_tasks(callback_query) -> None:
+    await callback_query.message.edit_reply_markup(reply_markup=None)
     all_done_tasks = await done_task_list()
     if not all_done_tasks:
-        await message.answer(
+        await callback_query.message.answer(
             text="Нет выполненных задач",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
     else:
         for task in all_done_tasks:
-            employee = await employee_by_id(task['employee_id'])
-            fio = f"{employee['name']} {employee['middle_name']} {employee['surname']}"
             task_details = (
                 f"Задача: {task['task_name']}\n"
-                f"Сотрудник: {fio}\n"
                 f"Описание: {task['task_description']}\n"
                 f"Статус: {task['status']}\n"
                 f"Срок: {format_datetime(task['deadline'], 'd MMMM yyyy, H:mm', locale='ru_RU')}\n"
@@ -439,24 +430,25 @@ async def admin_done_tasks(message, state: FSMContext) -> None:
                 f"Рейтинг: {task['rating']}\n"
                 f"Проверено: {'Да' if task['checked'] else 'Нет'}\n"
             )
-            await message.answer(text=task_details)
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Посмотреть задачу", callback_data=f"view_task_{task['id']}")],
+                [back_button]
+            ])
+            await callback_query.message.answer(text=task_details, reply_markup=keyboard)
 
 
-async def admin_all_current_tasks(message) -> None:
-    logging.info(f'admin all_current_tasks')
+async def all_current_tasks(callback_query) -> None:
+    await callback_query.message.edit_reply_markup(reply_markup=None)
     all_current_tasks = await current_tasks()
     if not all_current_tasks:
-        await message.answer(
+        await callback_query.message.answer(
             text="Нет новых задач",
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
     else:
         for task in all_current_tasks:
-            employee = await employee_by_id(task['employee_id'])
-            fio = f"{employee['name']} {employee['middle_name']} {employee['surname']}"
             task_details = (
                 f"Задача: {task['task_name']}\n"
-                f"Сотрудник: {fio}\n"
                 f"Описание: {task['task_description']}\n"
                 f"Статус: {task['status']}\n"
                 f"Срок: {format_datetime(task['deadline'], 'd MMMM yyyy, H:mm', locale='ru_RU')}\n"
@@ -464,13 +456,18 @@ async def admin_all_current_tasks(message) -> None:
                 f"Рейтинг: {task['rating']}\n"
                 f"Проверено: {'Да' if task['checked'] else 'Нет'}\n"
             )
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Посмотреть задачу", callback_data=f"view_task_{task['id']}")],
+                [back_button]
+            ])
+            await callback_query.message.answer(text=task_details, reply_markup=keyboard)
 
 
 async def balance_manage(callback_query) -> None:
     await callback_query.message.edit_reply_markup(reply_markup=None)
     await callback_query.message.answer(
         text="Управление счетами",
-
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
     )
 
 
@@ -478,7 +475,7 @@ async def null_money(callback_query) -> None:
     await callback_query.message.edit_reply_markup(reply_markup=None)
     await callback_query.message.answer(
         text="Обнуление счета",
-
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
     )
 
 
@@ -557,19 +554,17 @@ async def process_link_task(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
         text="Вы успешно добавили задачу.",
-
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
     )
 
-@dp.callback_query(F.data == "done_tasks")
-async def done_tasks(callback_query, state: FSMContext) -> None:
+
+async def done_tasks(callback_query, employee_id) -> None:
     await callback_query.message.edit_reply_markup(reply_markup=None)
-    data = await state.get_data()
-    employee_id = data.get('employee_id')
     tasks = await done_employee_tasks(employee_id)
     if not tasks:
         await callback_query.message.answer(
             text="У вас нет выполненных задач",
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
     else:
         for task in tasks:
@@ -582,8 +577,8 @@ async def done_tasks(callback_query, state: FSMContext) -> None:
                 f"Рейтинг: {task['rating']}\n"
                 f"Проверено: {'Да' if task['checked'] else 'Нет'}\n"
             )
-
-            await callback_query.message.answer(text=task_details)
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[back_button]])
+            await callback_query.message.answer(text=task_details, reply_markup=keyboard)
 
 
 async def balance(callback_query, employee_id) -> None:
@@ -592,19 +587,17 @@ async def balance(callback_query, employee_id) -> None:
     if not balance:
         await callback_query.message.answer(
             text="У вас еще нет баланса",
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
     else:
         await callback_query.message.answer(
             text=f"Ваш баланс {balance}",
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
 
-@dp.callback_query(F.data == "get_money")
-async def get_money(callback_query, state: FSMContext) -> None:
+
+async def get_money(callback_query, employee_id) -> None:
     await callback_query.message.edit_reply_markup(reply_markup=None)
-    data = await state.get_data()
-    employee_id = data.get('employee_id')
     employee = await employee_by_id(employee_id)
     output_msg = await balance_output(employee_id)
     message = f"Пользователь {employee['name']} {employee['surname']} запросил вывод средств {employee['balance']}. Необходимо подтверждение.\n "
@@ -612,32 +605,27 @@ async def get_money(callback_query, state: FSMContext) -> None:
     await notify_marketer(message)
     await callback_query.message.answer(
         text=output_msg,
-
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
     )
 
-@dp.callback_query(F.data.startswith("finish_task_"))
-async def finish_task(callback_query, state: FSMContext) -> None:
-    data = await state.get_data()
-    employee_id = data.get('employee_id')
-    logging.info(f'finish_task: {employee_id}')
-    task_id = int(callback_query.data.split("_")[-1])
-    logging.info(f'task_id: {task_id}')
+
+async def finish_task(callback_query, task_id, employee_id):
     await callback_query.message.edit_reply_markup(reply_markup=None)
     finish_task = await submit_task_func(employee_id, task_id)
     if not finish_task:
         await callback_query.message.answer(
             text="Задача не найдена",
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
     logging.info(f'finish_task: {finish_task}')
     await callback_query.message.answer(
         text=f"Вы успешно завершили задачу",
-
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
     )
-    # ## notify marketer
-    # employee = Employee.objects.get(id=employee_id)
-    # await notify_marketer(
-    #     f"Сотрудники {employee.name} {employee.surname} закончил задачу: {finish_task.id} - {finish_task.task.name}")
+    ## notify marketer
+    employee = Employee.objects.get(id=employee_id)
+    await notify_marketer(
+        f"Сотрудники {employee.name} {employee.surname} закончил задачу: {finish_task.id} - {finish_task.task.name}")
 
 
 async def view_task(callback_query, task_id):
@@ -646,7 +634,7 @@ async def view_task(callback_query, task_id):
     if not task:
         await callback_query.message.answer(
             text="Задача не найдена",
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
     else:
         task_details = (
@@ -661,7 +649,7 @@ async def view_task(callback_query, task_id):
         )
         await callback_query.message.answer(
             text=task_details,
-
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_button]])
         )
 
 
