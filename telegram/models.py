@@ -32,7 +32,13 @@ LEVEL_CHOICES = [
     ('middle', 'middle'),
     ('senior', 'senior'),
 ]
-
+STATUS_CHOICES = [
+    ('новое', 'Новое'),
+    ('в процессе', 'В процессе'),
+    ('завершено', 'Завершено'),
+    ('просрочено', 'Просрочено'),
+    ('отменено', 'Отмен')
+]
 WORKFLOW_ORDER = ['copywriter', 'mobilograph', 'editor', 'designer', 'smm', 'marketer', 'admin']
 
 
@@ -82,7 +88,7 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано в", blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено в", blank=True, null=True)
     # file_path = models.CharField(max_length=255, verbose_name="Путь к файлу", blank=True, null=True)
-    file = models.FileField(max_length=100, blank=True, null=True, verbose_name="Файл")
+    file = models.FileField(max_length=100, blank=True, null=True, verbose_name="Файл", upload_to='downloads/')
     link = models.URLField(verbose_name="Ссылка", blank=True, null=True)
 
     class Meta:
@@ -119,6 +125,7 @@ class EmployeeTask(models.Model):
     checked = models.BooleanField(verbose_name="Проверено")
     rating = models.IntegerField(verbose_name="Оценка", blank=True, null=True)
     address = models.CharField(max_length=255, verbose_name="Адрес", null=True, blank=True)
+    comment = models.TextField(verbose_name="Комментарий", null=True, blank=True)
 
     class Meta:
         verbose_name = 'задачу сотрудника'
@@ -138,140 +145,78 @@ class EmployeeTask(models.Model):
         #         pass
         if self.position is None:
             self.position = self.employee.position
+        if self.rating and self.checked:
+            self.employee.rating += self.rating
+            self.employee.save()
         super().save(*args, **kwargs)
-
-    def assign_employee_old(self):
-        """
-        1. Assign a task positions (employee group) +
-2. Assign a task to some user +
-3. If user is completed task then marketer checked task
-4. checked and User is completed task then task is passed to next group
-check is task is done by employee
-completed task by marketer
-        """
-        current_position = self.position
-
-        if current_position not in WORKFLOW_ORDER:
-            return
-
-        position_index = WORKFLOW_ORDER.index(current_position)
-
-        if position_index >= len(WORKFLOW_ORDER):
-            self.status = 'завершено'
-            return
-
-        position = WORKFLOW_ORDER[position_index]
-
-        employee_queryset = Employee.objects.filter(
-            position=position,
-            status=True
-        ).annotate(
-            task_count=Count('employeetask')
-        ).order_by('-rating', 'task_count')  # 'status'
-
-        if not employee_queryset.exists():
-            employee_queryset = Employee.objects.filter(
-                position=position
-            ).annotate(
-                task_count=Count('employeetask')
-            ).order_by('-rating', 'task_count')
-
-        if employee_queryset.exists():
-            highest_rating = employee_queryset.first().rating
-            top_employees = employee_queryset.filter(rating=highest_rating)
-
-            employee = random.choice(
-                top_employees) if top_employees.count() > 1 else employee_queryset.first()
-
-            logging.info(f"Employee: {employee.id}")
-
-            # employee_rating = employee.rating
-            # employee_rating += self.rating
-            # Employee.objects.filter(id=self.employee.id).update(rating=employee_rating)
-
-            EmployeeTask.objects.create(
-                employee=employee,
-                task=self.task,
-                status='новое',
-                deadline=self.deadline,
-                priority=self.priority,
-                checked=False,
-                rating=self.rating
-            )
-
-            TaskHistory.objects.create(
-                employee=employee,
-                task=self.task
-            )
-
-            message = "У вас новая задача"
-            bot.send_message(chat_id=employee.chat_id, text=message)
-            Notification.objects.create(
-                employee=employee,
-                task=self.task,
-                message=message
-            )
 
     def assign_next_employee(self):
         current_position = self.position
         if current_position not in WORKFLOW_ORDER:
             return
-
-        if self.checked is False:
-            return
-
+        is_saved = False
         next_position_index = WORKFLOW_ORDER.index(current_position)
+        logging.info(f"Current position: {current_position}")
+        logging.info(f"Next position index: {next_position_index}")
         ## if first position then it logic for copywriter
         ## else for other copywriter
-        if next_position_index == 0:
+        # copywiter logic position is copywriter and status is "завершено" and checked is True
+        if next_position_index != 0 and self.status == 'завершено' and self.checked:
+            logging.info(f"not Copier: {next_position_index}")
+            next_position_index += 1
+            logging.info(f"Next position: {next_position_index}")
+            ## next position pick some employee
+            is_saved = True
+        # copywriter logic position is copywriter and status is "новое"
+
+        if next_position_index == 0 and self.status == 'новое':
             logging.info(f"Copier: {next_position_index}")
-            if self.status == 'завершено' and self.checked:
-                next_position_index += 1
-                logging.info(f"Next position: {next_position_index}")
-                ## next position pick some employee
-                current_position = next_position_index
-            else:
-                pass
+            is_saved = True
+        logging.info(
+            f"assign to some copier by employee.rating and status {self.employee} | {self.task} | {self.status}")
+        # employee save the task or copier with status "новое"
+        if is_saved:
+            logging.info(f"EployeeTask: {self.employee} | {self.task} | {self.status} ")
+            employee_queryset = Employee.objects.filter(
+                position=WORKFLOW_ORDER[next_position_index],
+                status=True
+            ).annotate(
+                task_count=Count('employeetask')
+            ).order_by('-rating', 'task_count', 'status')
 
-        logging.info(f"assign to some copier by employee.rating and status")
-        employee_queryset = Employee.objects.filter(
-            position=WORKFLOW_ORDER[next_position_index],
-            status=True
-        ).annotate(
-            task_count=Count('employeetask')
-        ).order_by('-rating', 'task_count', 'status')
+            if employee_queryset.exists():
+                logging.info(f'next_employee_queryset {employee_queryset}')
+                highest_rating = employee_queryset.first().rating
+                top_employees = employee_queryset.filter(rating=highest_rating)
+                status = employee_queryset.first().status
+                top_employees_status = top_employees.filter(status=status)
+                employee = random.choice(
+                    top_employees_status) if top_employees_status.count() > 1 else employee_queryset.first()
+                logging.info(f"Employee: {employee.name}")
+                EmployeeTask.objects.create(
+                    employee=employee,
+                    task=self.task,
+                    status=self.STATUS_CHOICES[0][0],
+                    deadline=self.deadline,
+                    priority=self.priority,
+                    checked=False,
+                    rating=self.rating,
+                    position=None
+                )
 
-        if employee_queryset.exists():
-            logging.info(f'next_employee_queryset {employee_queryset}')
-            highest_rating = employee_queryset.first().rating
-            top_employees = employee_queryset.filter(rating=highest_rating)
-            status = employee_queryset.first().status
-            top_employees_status = top_employees.filter(status=status)
-            employee = random.choice(
-                top_employees_status) if top_employees_status.count() > 1 else employee_queryset.first()
-            logging.info(f"Employee: {employee.name}")
-            EmployeeTask.objects.create(
-                employee=employee,
-                task=self.task,
-                status=self.STATUS_CHOICES[0][1],
-                deadline=self.deadline,
-                priority=self.priority,
-                checked=False,
-                rating=self.rating,
-                position=None
-            )
+                ## add rating to employee
 
-            TaskHistory.objects.create(
-                employee=employee,
-                task=self.task
-            )
-            message = "У вас новая задача"
+                TaskHistory.objects.create(
+                    employee=employee,
+                    task=self.task
+                )
+                message = "У вас новая задача"
 
-            Notification.objects.create(
-                employee=employee,
-                task=self.task,
-                message=message
-            )
+                Notification.objects.create(
+                    employee=employee,
+                    task=self.task,
+                    message=message
+                )
 
 
 class Notification(models.Model):

@@ -10,7 +10,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from aiogram import Bot, Dispatcher, types
 from dotenv import load_dotenv
 import asyncio
-
+from datetime import datetime
 load_dotenv()
 
 API_TOKEN = os.getenv('TOKEN')
@@ -42,9 +42,10 @@ def done_task_list():
             'task_file', 'task_link', 'created_at', 'updated_at', 'status',
             'deadline', 'priority', 'checked', 'rating'
         )
+        logging.info(f'done_task_list: {employee_tasks}')
+        return list(employee_tasks)
     except (EmployeeTask.DoesNotExist):
-        return False
-    return list(employee_tasks)
+        return None
 
 @sync_to_async
 def register_employee(iin, name, middlename, surname, phone, employee_level, employee_position, telegram_username):
@@ -93,10 +94,12 @@ def current_tasks():
             'deadline', 'priority', 'checked', 'rating'
         )
         logging.info(f'current_tasks: {employee_tasks}')
+        return list(employee_tasks)
+
     except (EmployeeTask.DoesNotExist):
         return False
 
-    return list(employee_tasks)
+
 
 
 @sync_to_async
@@ -144,6 +147,9 @@ def submit_task_func(employee_id, task_id):
     employee_task.status="завершено"
     employee_task.save()
     return employee_task
+
+
+    # return employee_task
 
 
 # def finish_task_func(employee_id, task_id):
@@ -270,7 +276,7 @@ def current_employee_tasks(employee_id):
     employee = Employee.objects.get(id=employee_id)
     try:
         employee_tasks = EmployeeTask.objects.filter(
-            Q(status='в процессе') | Q(status='новое'),
+            Q(status='В процессе') | Q(status='Новое') | Q(status='в процессе') | Q(status='новое'),
             employee=employee
         ).select_related('task').annotate(
             task_name=F('task__name'),
@@ -403,15 +409,13 @@ def store_notification(chat_id, message):
 
 
 @sync_to_async
-def set_online(employee_id, status):
+def set_status(employee_id, status=False):
     employee = Employee.objects.get(id=employee_id)
     logging.info(f'Employee {employee_id} is now {"online" if status else "offline"}')
     employee.status = status
     employee.save()
     return status
 
-
-    return status
 
 
 @sync_to_async
@@ -427,3 +431,29 @@ def get_chat_id(employee_id):
         return employee.chat_id
     except Employee.DoesNotExist:
         return None
+
+@sync_to_async
+def submit_task_deadline_func(deadline_date, employee_id, task_id):
+    logging.info(f'submit_task_deadline_func {deadline_date} {employee_id} submitted task {task_id}')
+    prepare_date = datetime.strptime(deadline_date, '%d-%m-%Y/%H:%M')
+    deadline_date = prepare_date.strftime('%Y-%m-%d %H:%M:%S')
+    employee_task = EmployeeTask.objects.get(employee_id = employee_id, task_id = task_id)
+    employee_task.deadline = deadline_date
+    employee_task.save()
+    return employee_task
+
+@sync_to_async
+def submit_task_comment_func(comment, employee_id, task_id):
+    logging.info(f'submit_task_comment_func {comment} {employee_id} submitted task {task_id}')
+    employee_task = EmployeeTask.objects.get(employee_id = employee_id, task_id = task_id)
+    employee_task.comment = comment
+    employee_task.save()
+    return employee_task
+
+@sync_to_async
+def submit_task_status_func(status, employee_id, task_id):
+    logging.info(f'submit_task_status_func {status} {employee_id} submitted task {task_id}')
+    employee_task = EmployeeTask.objects.get(employee_id = employee_id, task_id = task_id)
+    employee_task.status = status
+    employee_task.save()
+    return employee_task

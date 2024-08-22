@@ -33,6 +33,7 @@ ALLOWED_HOSTS = [
     'frontend',
     'frontend:3000',
     '0.0.0.0',
+    '95.217.6.31'
 ]
 
 
