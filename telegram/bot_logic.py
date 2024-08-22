@@ -761,7 +761,7 @@ async def process_comments_task(message: Message, state: FSMContext):
         # clear words close and finish
         full_comment = re.sub(r'закрыть', '', full_comment)
         full_comment = re.sub(r'завершить', '', full_comment)
-        await submit_task_comment_func(full_comment, employee_id, task_id)
+        await submit_task_comment_func(full_comment, employee_id, task_id, params={'is_edited': True})
         await state.update_data(comments=[])
 
         await message.answer('Комментарий добавлен')

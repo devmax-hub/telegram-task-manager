@@ -126,6 +126,7 @@ class EmployeeTask(models.Model):
     rating = models.IntegerField(verbose_name="Оценка", blank=True, null=True)
     address = models.CharField(max_length=255, verbose_name="Адрес", null=True, blank=True)
     comment = models.TextField(verbose_name="Комментарий", null=True, blank=True)
+    params = models.JSONField(verbose_name="Доп. параметры", null=True, blank=True, default={'is_edited': False})
 
     class Meta:
         verbose_name = 'задачу сотрудника'
@@ -148,6 +149,8 @@ class EmployeeTask(models.Model):
         if self.rating and self.checked:
             self.employee.rating += self.rating
             self.employee.save()
+        if self.params['is_edited']:
+            self.params['is_edited'] = False
         super().save(*args, **kwargs)
 
     def assign_next_employee(self):
@@ -175,6 +178,9 @@ class EmployeeTask(models.Model):
         logging.info(
             f"assign to some copier by employee.rating and status {self.employee} | {self.task} | {self.status}")
         # employee save the task or copier with status "новое"
+        # check if task is edited by employee
+        if self.params['is_edited']:
+            is_saved = False
         if is_saved:
             logging.info(f"EployeeTask: {self.employee} | {self.task} | {self.status} ")
             employee_queryset = Employee.objects.filter(
