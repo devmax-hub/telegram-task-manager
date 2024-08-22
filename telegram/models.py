@@ -163,7 +163,7 @@ class EmployeeTask(models.Model):
         ## if first position then it logic for copywriter
         ## else for other copywriter
         # copywiter logic position is copywriter and status is "завершено" and checked is True
-        if next_position_index != 0 and self.status == 'завершено' and self.checked:
+        if next_position_index in [0, 1, 2, 3,4,5] and self.status == 'завершено' and self.checked:
             logging.info(f"not Copier: {next_position_index}")
             next_position_index += 1
             logging.info(f"Next position: {next_position_index}")
@@ -179,7 +179,7 @@ class EmployeeTask(models.Model):
         # employee save the task or copier with status "новое"
         # check if task is edited by employee
         logging.info(f"Auto pass: {self.AUTO_PASS}")
-        if self.AUTO_PASS:
+        if self.AUTO_PASS or self.autopass:
             is_saved = False
         if is_saved:
             logging.info(f"EployeeTask: {self.employee} | {self.task} | {self.status} ")
