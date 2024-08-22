@@ -443,14 +443,11 @@ def submit_task_deadline_func(deadline_date, employee_id, task_id):
     return employee_task
 
 @sync_to_async
-def submit_task_comment_func(comment, employee_id, task_id, params={}):
+def submit_task_comment_func(comment, employee_id, task_id, autopass=True, **params):
     logging.info(f'submit_task_comment_func {comment} {employee_id} submitted task {task_id}')
     employee_task = EmployeeTask.objects.get(employee_id = employee_id, task_id = task_id)
-    if len(params) > 0:
-        if employee_task.params is None:
-           employee_task.params = params
-        else:
-            employee_task.params.update(params)
+    if autopass:
+        employee_task.AUTO_PASS = True
     employee_task.comment = comment
     employee_task.save()
     return employee_task

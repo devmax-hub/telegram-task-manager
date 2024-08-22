@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from dotenv import load_dotenv
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .models import EmployeeTask, Employee
 from aiogram import Bot
@@ -38,3 +38,9 @@ async def send_employee_task_notification(sender, instance, created, **kwargs):
                 await bot.send_message(chat_id=chat_id, text=message_admin_marketer)
             except Exception as e:
                 print(f"Error sending admin/marketer message to chat_id {chat_id}: {e}")
+
+@receiver(pre_save, sender=EmployeeTask)
+def set_autopass(sender, instance, **kwargs):
+    """set self.autopass = True"""
+    if instance.autopass:
+        instance.autopass = True
