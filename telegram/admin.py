@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import *
 from django.contrib.auth.models import Group, User
+from django.utils.translation import gettext_lazy as _
 
 
 @admin.register(Employee)
@@ -43,3 +44,21 @@ class BalanceAdmin(admin.ModelAdmin):
 @admin.register(WithdrawDeposit)
 class WithdrawDepositAdmin(admin.ModelAdmin):
     list_display = ('balance', 'amount', 'status', 'type', 'created_at', 'updated_at')
+
+# @admin.register(CustomUser)
+# class CustomUserAdmin(admin.ModelAdmin):
+#     fieldsets = (
+#         (None, {'fields': ('email', 'password')}),
+#         (_('Personal info'), {'fields': ('first_name', 'last_name')}),
+#         (_('Permissions'), {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+#         (_('Important dates'), {'fields': ('last_login',)}),
+#     )
+#     add_fieldsets = (
+#         (None, {
+#             'classes': ('wide',),
+#             'fields': ('email', 'first_name', 'last_name', 'password1', 'password2'),
+#         }),
+#     )
+#     list_display = ('email', 'first_name', 'last_name', 'is_staff')
+#     search_fields = ('email', 'first_name', 'last_name')
+#     ordering = ('email',)

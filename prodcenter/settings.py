@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_q',
     'telegram',
 
 ]
@@ -173,3 +174,21 @@ LOGGING = {
     }
 
 }
+
+Q_CLUSTER = {
+    'name': 'app',
+    'workers': 8,
+    'recycle': 500,
+    'timeout': 60,
+    'compress': True,
+    'cpu_affinity': 1,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'label': 'Django Q',
+    'redis': {
+        'host': 'redis',
+        'port': 6379,
+        'db': 0,
+    }
+}
+# AUTH_USER_MODEL = 'telegram.CustomUser'
