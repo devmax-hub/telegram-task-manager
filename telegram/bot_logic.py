@@ -476,8 +476,9 @@ async def admin_all_current_tasks(message) -> None:
 
         )
     else:
-        logging.info(f'all_current_tasks: {all_current_tasks}')
         for task in all_current_tasks:
+            if task['employee_id'] is None:
+                continue
             employee = await employee_by_id(task['employee_id'])
             fio = f"{employee['name']} {employee['middle_name']} {employee['surname']}"
             task_details = (
